@@ -3,55 +3,71 @@ import { z } from "zod";
 import * as people from '../services/people'
 import { decryptMatch } from "../utils/match";
 
+// Get all people in a specific group and event
 export const getAll: RequestHandler = async (req, res) => {
     const { id_event, id_group } = req.params;
 
-    const items = await people.getAll({
-        id_event: parseInt(id_event),
-        id_group: parseInt(id_group)
-    });
-    
-    if(items) return res.json({ people: items });
+    try {
+        const items = await people.getAll({
+            id_event: parseInt(id_event),
+            id_group: parseInt(id_group)
+        });
 
-    res.json({error: "Aconteceu um erro"});
-
+        if (items) return res.json({ people: items });
+        res.status(404).json({ error: "No people found" });
+    } catch (error) {
+        res.status(500).json({ error: "An error occurred while fetching people" });
+    }
 }
 
-export const getPerson:RequestHandler = async (req, res) => {
+
+// Get a single person by ID in a specific group and event
+export const getPerson: RequestHandler = async (req, res) => {
     const { id, id_event, id_group } = req.params;
 
-    const personItem = await people.getOne({
-        id: parseInt(id),
-        id_event: parseInt(id_event),
-        id_group: parseInt(id_group)
-    });
+    try {
+        const personItem = await people.getOne({
+            id: parseInt(id),
+            id_event: parseInt(id_event),
+            id_group: parseInt(id_group)
+        });
 
-    if(!personItem) return res.json({error: "Aconteceu algum erro"});
-    return res.json({people: {personItem}});
+        if (!personItem) return res.status(404).json({ error: "Person not found" });
+        return res.json({ person: personItem });
+    } catch (error) {
+        res.status(500).json({ error: "An error occurred while fetching the person" });
+    }
 }
 
-export const addPerson:RequestHandler = async (req, res) => {
+
+// Add a new person to a specific group and event
+export const addPerson: RequestHandler = async (req, res) => {
     const { id_event, id_group } = req.params;
-    
+
     const addPersonSchema = z.object({
         name: z.string(),
         cpf: z.string().transform(val => val.replace(/\.|-/gm, ''))
     });
 
     const body = addPersonSchema.safeParse(req.body);
-    if(!body.success) return res.json({error: "Dados inválidos"});
+    if (!body.success) return res.status(400).json({ error: "Invalid data" });
 
-    const newPerson = await people.add({
-        ...body.data,
-        id_event: parseInt(id_event),
-        id_group: parseInt(id_group)
-    });
+    try {
+        const newPerson = await people.add({
+            ...body.data,
+            id_event: parseInt(id_event),
+            id_group: parseInt(id_group)
+        });
 
-    if(!newPerson) return res.json({error: "Aconteceu algum erro"});
-    return res.json({people: {newPerson}});
+        if (!newPerson) return res.status(500).json({ error: "An error occurred while adding the person" });
+        return res.status(201).json({ person: newPerson });
+    } catch (error) {
+        res.status(500).json({ error: "An error occurred while adding the person" });
+    }
 }
 
-export const updatePerson:RequestHandler = async (req, res) => {
+// Update an existing person in a specific group and event
+export const updatePerson: RequestHandler = async (req, res) => {
     const { id, id_group, id_event } = req.params;
 
     const updatePersonSchema = z.object({
@@ -61,38 +77,50 @@ export const updatePerson:RequestHandler = async (req, res) => {
     });
 
     const body = updatePersonSchema.safeParse(req.body);
-    if(!body.success) return res.json({error: "Ocorreu algum erro"});
-    
-    const updatedPerson = await people.update({
-        id: parseInt(id),
-        id_event: parseInt(id_event),
-        id_group: parseInt(id_group)
-    }, body.data);
+    if (!body.success) return res.status(400).json({ error: "Invalid data" });
 
-    if (updatedPerson) {
-        const personItem = await people.getOne({
+    try {
+        const updatedPerson = await people.update({
             id: parseInt(id),
             id_event: parseInt(id_event),
-        });
-        return res.json({person: personItem});
+            id_group: parseInt(id_group)
+        }, body.data);
+
+        if (updatedPerson) {
+            const personItem = await people.getOne({
+                id: parseInt(id),
+                id_event: parseInt(id_event),
+            });
+            return res.json({ person: personItem });
+        }
+
+        res.status(404).json({ error: "Person not found" });
+    } catch (error) {
+        res.status(500).json({ error: "An error occurred while updating the person" });
     }
-
-    res.json({error: "Ocorreu algum erro"});
 }
 
-export const deletePerson:RequestHandler = async (req, res) => {
+// Delete a person from a specific group and event
+export const deletePerson: RequestHandler = async (req, res) => {
     const { id, id_event, id_group } = req.params;
-    const deletedPerson = await people.remove({
-        id: parseInt(id),
-        id_event: parseInt(id_event),
-        id_group: parseInt(id_group),
-    });
 
-    if(!deletedPerson) return res.json({error: "Aconteceu algum erro"});
-    return res.json({people: {deletedPerson}});
+    try {
+        const deletedPerson = await people.remove({
+            id: parseInt(id),
+            id_event: parseInt(id_event),
+            id_group: parseInt(id_group),
+        });
+
+        if (!deletedPerson) return res.status(404).json({ error: "Person not found" });
+        return res.json({ person: deletedPerson });
+    } catch (error) {
+        res.status(500).json({ error: "An error occurred while deleting the person" });
+    }
 }
 
-export const searchPerson:RequestHandler = async (req, res) => {
+
+// Search for a person by CPF in a specific event
+export const searchPerson: RequestHandler = async (req, res) => {
     const { id_event } = req.params;
 
     const searchSchema = z.object({
@@ -100,34 +128,38 @@ export const searchPerson:RequestHandler = async (req, res) => {
     });
 
     const query = searchSchema.safeParse(req.query);
-    if(!query.success) return res.json({error: 'Dados inválidos'});
+    if (!query.success) return res.status(400).json({ error: 'Invalid data' });
 
-    const personItem = await people.getOne({
-        id_event: parseInt(id_event),
-        cpf: query.data.cpf
-    });
-
-    if(personItem && personItem.matched){
-        const matchedId = decryptMatch(personItem.matched);
-
-        const personMatched = await people.getOne({
+    try {
+        const personItem = await people.getOne({
             id_event: parseInt(id_event),
-            id: matchedId
+            cpf: query.data.cpf
         });
 
-        if(personMatched){
-            return res.json({
-                person: {
-                    id: personItem.id,
-                    name: personItem.name,
-                }, 
-                personMatched: {
-                    id: personMatched.id,
-                    name: personMatched.name,
-                }
-            });
-        }
-    }
+        if (personItem && personItem.matched) {
+            const matchedId = decryptMatch(personItem.matched);
 
-    res.json({error: "Ocorreu um erro"});
+            const personMatched = await people.getOne({
+                id_event: parseInt(id_event),
+                id: matchedId
+            });
+
+            if (personMatched) {
+                return res.json({
+                    person: {
+                        id: personItem.id,
+                        name: personItem.name,
+                    },
+                    personMatched: {
+                        id: personMatched.id,
+                        name: personMatched.name,
+                    }
+                });
+            }
+        }
+
+        res.status(404).json({ error: "Person or matched person not found" });
+    } catch (error) {
+        res.status(500).json({ error: "An error occurred while searching for the person" });
+    }
 }

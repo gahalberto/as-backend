@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client"
+import { PrismaClient, Prisma } from "@prisma/client";
 import * as people from "../services/people";
 import * as group from "../services/groups";
 import { encryptMatch } from "../utils/match";
@@ -13,6 +13,7 @@ export const getAll = async () => {
         return await prisma.event.findMany();
     } catch (error) {
         // Return false if an error occurs
+        console.error("Error fetching events:", error);
         return false;
     }
 }
@@ -24,6 +25,7 @@ export const getOne = async (id: number) => {
         return await prisma.event.findFirst({ where: { id } });
     } catch (error) {
         // Return false if an error occurs
+        console.error("Error fetching event:", error);
         return false;
     }
 }
@@ -38,6 +40,7 @@ export const add = async (data: EventsCreateData) => {
         return await prisma.event.create({ data });
     } catch (error) {
         // Return false if an error occurs
+        console.error("Error adding event:", error);
         return false;
     }
 }
@@ -52,6 +55,7 @@ export const update = async (id: number, data: EventsUpdateData) => {
         return await prisma.event.update({ where: { id }, data });
     } catch (error) {
         // Return false if an error occurs
+        console.error("Error updating event:", error);
         return false;
     }
 }
@@ -63,6 +67,7 @@ export const remove = async (id: number) => {
         return await prisma.event.delete({ where: { id } });
     } catch (error) {
         // Return false if an error occurs
+        console.error("Error deleting event:", error);
         return false;
     }
 }
