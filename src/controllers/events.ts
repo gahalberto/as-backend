@@ -62,6 +62,7 @@ export const updateEvent: RequestHandler = async (req, res) => {
     // Handle event status
     if (updatedEvent.status) {
         const result = await events.doMatches(parseInt(id));
+        console.log(result);
         if (!result) return res.json({ error: "Impossible to create groups" });
     } else {
         await people.update({ id_event: parseInt(id) }, { matched: '' });

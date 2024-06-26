@@ -31,7 +31,7 @@ export const getOne = async (id: number) => {
 }
 
 // Type for creating events data
-type EventsCreateData = Prisma.Args<typeof prisma.event, 'create'>['data'];
+type EventsCreateData = Prisma.EventCreateInput;
 
 // Function to add a new event
 export const add = async (data: EventsCreateData) => {
@@ -46,7 +46,7 @@ export const add = async (data: EventsCreateData) => {
 }
 
 // Type for updating events data
-type EventsUpdateData = Prisma.Args<typeof prisma.event, 'update'>['data'];
+type EventsUpdateData = Prisma.EventUpdateInput;
 
 // Function to update an existing event by ID
 export const update = async (id: number, data: EventsUpdateData) => {
@@ -74,71 +74,53 @@ export const remove = async (id: number) => {
 
 // Function to perform matching for an event
 export const doMatches = async (id: number): Promise<boolean> => {
-    // Retrieve the event with the specified ID and check if it is grouped
     const eventItem = await prisma.event.findFirst({ where: { id }, select: { grouped: true } });
 
-    if (eventItem) {
-        // Get the list of people for the event
-        const peopleList = await people.getAll({ id_event: id });
-        if (peopleList && peopleList.length > 1) {
-            let sortedList: { id: number, match: number }[] = [];
-            let attempts = 0;
-            const maxAttempts = peopleList.length;
+    if (!eventItem) return false;
 
-            // Try matching until successful or max attempts reached
-            while (attempts < maxAttempts) {
-                attempts++;
-                sortedList = [];
-                let sortable = peopleList.map(item => item.id);
-                let keepTrying = false;
+    const peopleList = await people.getAll({ id_event: id });
+    console.log(peopleList);
+    if (!peopleList || peopleList.length === 0) return false;
 
-                for (const person of peopleList) {
-                    let sortableFiltered = sortable;
-                    if (eventItem.grouped) {
-                        // Filter out people from the same group
-                        sortableFiltered = sortable.filter(sortableItem => {
-                            const sortablePerson = peopleList.find(item => item.id === sortableItem);
-                            return person.id_group !== sortablePerson?.id_group;
-                        });
-                    }
+    const sortedList: { id: number, match: number }[] = [];
+    const maxAttempts = peopleList.length * 2; // Aumentar tentativas para assegurar pareamento
 
-                    // Check if matching is possible
-                    if (sortableFiltered.length === 0 || (sortableFiltered.length === 1 && person.id === sortableFiltered[0])) {
-                        keepTrying = true;
-                        break;
-                    } else {
-                        // Randomly select a match
-                        let sortedIndex = Math.floor(Math.random() * sortableFiltered.length);
-                        while (sortableFiltered[sortedIndex] === person.id) {
-                            sortedIndex = Math.floor(Math.random() * sortableFiltered.length);
-                        }
+    for (let attempts = 0; attempts < maxAttempts; attempts++) {
+        sortedList.length = 0; // Limpar a lista de pareamentos para cada tentativa
+        let sortable = peopleList.map(item => item.id);
+        let keepTrying = false;
 
-                        sortedList.push({ id: person.id, match: sortableFiltered[sortedIndex] });
-                        sortable = sortable.filter(item => item !== sortableFiltered[sortedIndex]);
-                    }
-                }
+        for (let i = 0; i < peopleList.length; i++) {
+            let sortableFiltered = sortable.filter(sortableItem => {
+                const sortablePerson = peopleList.find(item => item.id === sortableItem);
+                return peopleList[i].id_group !== sortablePerson?.id_group;
+            });
 
-                // Break loop if matching was successful
-                if (!keepTrying) break;
+            if (sortableFiltered.length === 0) {
+                keepTrying = true;
+                break;
             }
 
-            console.log(`ATTEMPTS: ${attempts}`);
-            console.log(`MAX ATTEMPTS: ${maxAttempts}`);
-            console.log(sortedList);
+            const sortedIndex = Math.floor(Math.random() * sortableFiltered.length);
+            const matchId = sortableFiltered[sortedIndex];
 
-            // If matching was successful, update people with their matches
-            if (attempts < maxAttempts) {
-                for (const match of sortedList) {
-                    await people.update(
-                        { id: match.id, id_event: id },
-                        { matched: encryptMatch(match.match) }
-                    );
-                }
-                return true;
+            sortedList.push({ id: peopleList[i].id, match: matchId });
+            sortable = sortable.filter(item => item !== matchId);
+        }
+
+        if (!keepTrying && sortedList.length === peopleList.length) {
+            console.log(`Successful match after ${attempts + 1} attempts:`, sortedList);
+            for (let i = 0; i < sortedList.length; i++) {
+                await people.update({
+                    id: sortedList[i].id,
+                    id_event: id
+                },
+                { matched: encryptMatch(sortedList[i].match) });
             }
+            return true;
         }
     }
 
-    // Return false if matching was not successful
+    console.log('Failed to find a valid match after max attempts');
     return false;
 }
