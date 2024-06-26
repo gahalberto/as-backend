@@ -83,17 +83,17 @@ export const doMatches = async (id: number): Promise<boolean> => {
     if (!peopleList || peopleList.length === 0) return false;
 
     const sortedList: { id: number, match: number }[] = [];
-    const maxAttempts = peopleList.length * 2; // Aumentar tentativas para assegurar pareamento
+    const maxAttempts = peopleList.length * 2;
 
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
-        sortedList.length = 0; // Limpar a lista de pareamentos para cada tentativa
+        sortedList.length = 0;
         let sortable = peopleList.map(item => item.id);
         let keepTrying = false;
 
         for (let i = 0; i < peopleList.length; i++) {
             let sortableFiltered = sortable.filter(sortableItem => {
                 const sortablePerson = peopleList.find(item => item.id === sortableItem);
-                return peopleList[i].id_group !== sortablePerson?.id_group;
+                return !eventItem.grouped || (peopleList[i].id_group !== sortablePerson?.id_group);
             });
 
             if (sortableFiltered.length === 0) {
@@ -121,6 +121,29 @@ export const doMatches = async (id: number): Promise<boolean> => {
         }
     }
 
-    console.log('Failed to find a valid match after max attempts');
-    return false;
+    // Fallback to ensure every person gets a match even if some groups are not perfect
+    console.log('Fallback: ensuring every person gets a match');
+
+    let sortable = peopleList.map(item => item.id);
+    for (let i = 0; i < peopleList.length; i++) {
+        let matchId;
+        if (sortable.length > 1) {
+            matchId = sortable.find(item => item !== peopleList[i].id) || sortable[0];
+        } else {
+            matchId = sortable[0];
+        }
+
+        sortedList.push({ id: peopleList[i].id, match: matchId });
+        sortable = sortable.filter(item => item !== matchId);
+    }
+
+    console.log(`Final sortedList:`, sortedList);
+    for (let i = 0; i < sortedList.length; i++) {
+        await people.update({
+            id: sortedList[i].id,
+            id_event: id
+        },
+        { matched: encryptMatch(sortedList[i].match) });
+    }
+    return true;
 }

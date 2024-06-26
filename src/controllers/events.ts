@@ -73,7 +73,7 @@ export const updateEvent: RequestHandler = async (req, res) => {
 // Delete an event
 export const deleteEvent: RequestHandler = async (req, res) => {
     const { id } = req.params;
-
+    console.log(id);
     // Remove event
     const deletedEvent = await events.remove(parseInt(id));
     if (!deletedEvent) return res.json({ error: 'An error occurred' });
